@@ -95,6 +95,7 @@ def variance_reduced_boost_step(net, optimizer, feat_data, labels,
             
             weight = 1.0/torch.FloatTensor(probs_nodes).to(device)
             # compute current stochastic gradient
+            
             optimizer.zero_grad()
 
             current_loss = wrapper.partial_grad(net, feat_data[input_nodes], adjs, sampled_nodes, feat_data, 
@@ -181,6 +182,7 @@ def variance_reduced_step(net, optimizer, feat_data, labels,
             adjs_exact = package_mxl(adjs_exact, device)
             # compute current stochastic gradient
             optimizer.zero_grad()
+
             current_loss = wrapper.partial_grad(net, 
                 feat_data[input_nodes], adjs, sampled_nodes, feat_data, adjs_exact, input_exact_nodes, labels[output_nodes])
 

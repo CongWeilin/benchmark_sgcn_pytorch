@@ -217,65 +217,53 @@ def mvs_gcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,
     print('Average time is %0.3f'%np.mean(times))
     return best_model, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all
 
-
 """
-Wrapper for Minimal Variance Sampling GCN +
+Wrapper for Subgraph Sampling
 """
-
 
 class ForwardWrapper(nn.Module):
     def __init__(self, n_nodes, n_hid, n_layers, n_classes):
         super(ForwardWrapper, self).__init__()
         self.n_layers = n_layers
-        self.hiddens = torch.zeros(n_layers, n_nodes, n_hid)
+        self.hiddens = torch.zeros(n_layers-1, n_nodes, n_hid)
 
     def forward_full(self, net, x, adjs, sampled_nodes):
         for ell in range(len(net.gcs)):
             x = net.gcs[ell](x, adjs[ell])
             x = net.relu(x)
             x = net.dropout(x)
-            self.hiddens[ell, sampled_nodes[ell]] = x.cpu().detach()
-        x = net.gc_out(x, adjs[self.n_layers-1])
+            self.hiddens[ell,sampled_nodes[ell]] = x.cpu().detach()
+            
+        ell = self.n_layers-1
+        x = net.gc_out(x, adjs[ell])
         return x
 
     def forward_mini(self, net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes):
         cached_outputs = []
         for ell in range(len(net.gcs)):
-            exact_input = input_exact_nodes[ell]
-            
-            if ell == 0:
-                x = x_exact[exact_input]
-                x = torch.spmm(adjs_exact[ell], x)
-            else:
-                sample_input = sampled_nodes[ell-1]
-                x_bar = self.hiddens[ell-1, sample_input].to(x)
-                x_bar_exact = self.hiddens[ell-1, exact_input].to(x)
-                x = torch.spmm(adjs[ell], x-x_bar) + torch.spmm(adjs_exact[ell], x_bar_exact)
-
-            x = net.gcs[ell].linear(x)
+            x_bar = x if ell == 0 else self.hiddens[ell-1,sampled_nodes[ell-1]].to(x)
+            x_bar_exact = x_exact[input_exact_nodes[ell]] if ell == 0 else self.hiddens[ell-1,input_exact_nodes[ell]].to(x)
+            x = net.gcs[ell](x, adjs[ell]) - net.gcs[ell](x_bar, adjs[ell]) + net.gcs[ell](x_bar_exact, adjs_exact[ell])
             x = net.relu(x)
             x = net.dropout(x)
-            cached_outputs += [x.cpu().detach()]
+            cached_outputs += [x.detach().cpu()]
 
-        ell = self.n_layers-1
-        exact_input = input_exact_nodes[ell]
-
-        x_bar = self.hiddens[ell-1, sampled_nodes[ell-1]].to(x)
-        x_bar_exact = self.hiddens[ell-1, exact_input].to(x)
-        x = torch.spmm(adjs[ell], x-x_bar) + torch.spmm(adjs_exact[ell], x_bar_exact)
-        x = net.gc_out.linear(x)
+        ell=self.n_layers-1
+        x_bar = x if ell == 0 else self.hiddens[ell-1, sampled_nodes[ell-1]].to(x)
+        x_bar_exact = x_exact[input_exact_nodes[ell]] if ell == 0 else self.hiddens[ell-1,input_exact_nodes[ell]].to(x)
+        x = net.gc_out(x, adjs[ell]) - net.gc_out(x_bar, adjs[ell]) + net.gc_out(x_bar_exact, adjs_exact[ell])
 
         for ell in range(self.n_layers-1):
             self.hiddens[ell, sampled_nodes[ell]] = cached_outputs[ell]
         return x
-
+    
     def calculate_sample_grad(self, net, x, adjs, sampled_nodes, targets, batch_nodes):
         outputs = self.forward_full(net, x, adjs, sampled_nodes)
         loss = net.loss_f(outputs, targets[batch_nodes])
         loss.backward()
         grad_per_sample = autograd_wl.calculate_sample_grad()
         return grad_per_sample.cpu().numpy()
-    
+        
     def partial_grad(self, net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes, targets, weight=None):
         outputs = self.forward_mini(net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes)
         if weight is None:

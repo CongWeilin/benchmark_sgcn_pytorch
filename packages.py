@@ -2,7 +2,7 @@ import multiprocessing as mp
 from samplers import CalculateThreshold
 from model import GCN, GraphSageGCN
 from optimizers import package_mxl
-from samplers import ladies_sampler, vrgcn_sampler, graphsage_sampler, fastgcn_sampler, exact_sampler, subgraph_sampler, full_batch_sampler, mini_batch_sampler, cluster_sampler
+from samplers import ladies_sampler, vrgcn_sampler, graphsage_sampler, fastgcn_sampler, exact_sampler, subgraph_sampler, cluster_sampler
 import numpy as np
     
 def prepare_data(pool, sampler, process_ids, train_nodes, train_nodes_p, samp_num_list, num_nodes, adj_matrix, depth, is_ratio=1.0):
