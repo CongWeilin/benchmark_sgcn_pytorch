@@ -9,8 +9,8 @@ class GraphConvolution(nn.Module):
         self.reset_parameters()
 
     def forward(self, x, adj):
-        x = torch.spmm(adj, x)
         x = self.linear(x)
+        x = torch.spmm(adj, x)
         return x
 
     def reset_parameters(self):
@@ -25,19 +25,19 @@ class GraphSageConvolution(nn.Module):
         super(GraphSageConvolution, self).__init__()
         self.n_in = n_in
         self.n_out = n_out
-        self.linear = nn.Linear(2*n_in, n_out, bias=bias)
+        self.linear = nn.Linear(n_in, n_out, bias=bias)
         self.reset_parameters()
         
         if use_lynorm:
-            self.lynorm = nn.LayerNorm(n_out, elementwise_affine=True)
+            self.lynorm = nn.LayerNorm(2*n_out, elementwise_affine=True)
         else:
             self.lynorm = lambda x: x
 
     def forward(self, x, adj):
         out_node_num = adj.size(0)
+        x = self.linear(x)
         support = torch.spmm(adj, x)
         x = torch.cat([x[:out_node_num], support], dim=1)
-        x = self.linear(x)
         x = self.lynorm(x)
         return x
 

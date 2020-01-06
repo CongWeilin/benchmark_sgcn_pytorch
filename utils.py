@@ -313,3 +313,18 @@ def get_adj(edges, num_nodes):
 def get_laplacian(adj):
     adj = normalize(adj + sp.eye(adj.shape[0]))
     return sparse_mx_to_torch_sparse_tensor(adj)
+
+"""
+To make plot smoother like tensorboard
+"""
+def smooth(scalars, weight=0.2):  # Weight between 0 and 1
+    if len(scalars)==0:
+        return scalars
+    last = scalars[0]  # First value in the plot (first timestep)
+    smoothed = list()
+    for point in scalars:
+        smoothed_val = last * weight + (1 - weight) * point  # Calculate smoothed value
+        smoothed.append(smoothed_val)                        # Save it
+        last = smoothed_val                                  # Anchor the last smoothed value
+
+    return smoothed

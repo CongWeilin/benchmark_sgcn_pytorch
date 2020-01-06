@@ -23,12 +23,14 @@ def CalculateThreshold(candidatesArray, sampleSize, sumSmall=0, nLarge=0):
             sumSmall = sumSmall + sum(smallArray) + sum(equalArray)
             return CalculateThreshold(largeArray, sampleSize, sumSmall, nLarge)
 
+
 class fastgcn_sampler:
     def __init__(self, adj_matrix, train_nodes):
         assert(adj_matrix.diagonal().sum() == 0)  # make sure diagnal is zero
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
         self.train_nodes = train_nodes
         self.lap_matrix = normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
         self.lap_matrix_sq = self.lap_matrix.multiply(self.lap_matrix)
@@ -43,9 +45,10 @@ class fastgcn_sampler:
         for d in range(depth):
             U = self.lap_matrix[previous_nodes, :]
             s_num = np.min([np.sum(p > 0), samp_num_list[d]])
-            after_nodes = np.random.choice(num_nodes, s_num, p=p, replace=False)
-            after_nodes = np.unique(np.concatenate((after_nodes, batch_nodes)))
-            adj = U[:, after_nodes].multiply(1/p[after_nodes])
+            after_nodes = np.random.choice(
+                num_nodes, s_num, p=p, replace=False)
+            after_nodes = np.unique(after_nodes)
+            adj = U[:, after_nodes].multiply(1/p[after_nodes]/num_nodes)
             adjs += [sparse_mx_to_torch_sparse_tensor(row_normalize(adj))]
             sampled_nodes += [previous_nodes]
             previous_nodes = after_nodes
@@ -60,12 +63,14 @@ class fastgcn_sampler:
         sampled_nodes = [np.arange(num_nodes) for _ in range(depth)]
         return adjs, input_nodes, sampled_nodes
 
+
 class ladies_sampler:
     def __init__(self, adj_matrix, train_nodes):
         assert(adj_matrix.diagonal().sum() == 0)  # make sure diagnal is zero
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
         self.train_nodes = train_nodes
         self.lap_matrix = normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
         self.lap_matrix_sq = self.lap_matrix.multiply(self.lap_matrix)
@@ -77,10 +82,12 @@ class ladies_sampler:
         adjs = []
         for d in range(depth):
             U = self.lap_matrix[previous_nodes, :]
-            pi = np.array(np.sum(self.lap_matrix_sq[previous_nodes, :], axis=0))[0]
+            pi = np.array(
+                np.sum(self.lap_matrix_sq[previous_nodes, :], axis=0))[0]
             p = pi / np.sum(pi)
             s_num = np.min([np.sum(p > 0), samp_num_list[d]])
-            after_nodes = np.random.choice(num_nodes, s_num, p=p, replace=False)
+            after_nodes = np.random.choice(
+                num_nodes, s_num, p=p, replace=False)
             after_nodes = np.unique(np.concatenate((after_nodes, batch_nodes)))
             adj = U[:, after_nodes].multiply(1/p[after_nodes])
             adjs += [sparse_mx_to_torch_sparse_tensor(row_normalize(adj))]
@@ -104,8 +111,8 @@ class cluster_sampler:
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
-        self.lap_matrix = normalize_with_diag_enhance(
-            adj_matrix, diag_lambda=1)
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
+        self.lap_matrix = normalize_with_diag_enhance(adj_matrix, diag_lambda=1)
         self.train_nodes = train_nodes
         self.num_clusters = num_clusters
         self.parts = partition_graph(
@@ -121,7 +128,7 @@ class cluster_sampler:
     def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
         bsize = samp_num_list[0]
         batch_nodes = self.sample_subgraph(seed, bsize)
-        
+
         sampled_nodes = []
         adj = self.adj_matrix[batch_nodes, :][:, batch_nodes]
         adj = normalize_with_diag_enhance(adj, diag_lambda=1)
@@ -132,7 +139,6 @@ class cluster_sampler:
         adjs.reverse()
         sampled_nodes.reverse()
         return adjs, batch_nodes, batch_nodes, probs_nodes, sampled_nodes
-
 
     def full_batch(self, batch_nodes, num_nodes, depth):
         adjs = [sparse_mx_to_torch_sparse_tensor(
@@ -147,9 +153,11 @@ class graphsage_sampler:
         assert(adj_matrix.diagonal().sum() == 0)  # make sure diagnal is zero
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
-        self.adj_matrix = adj_matrix
+        self.adj_matrix = adj_matrix 
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
         self.train_nodes = train_nodes
-        self.lap_matrix = row_normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
+        self.lap_matrix = normalize(
+            adj_matrix + sp.eye(adj_matrix.shape[0]))
 
     def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
         np.random.seed(seed)
@@ -157,13 +165,12 @@ class graphsage_sampler:
         previous_nodes = batch_nodes
         adjs = []
         for d in range(depth):
-            U = self.adj_matrix[previous_nodes, :]
+            U = self.adj_matrix_sc[previous_nodes, :]
             after_nodes = []
             for U_row in U:
                 indices = U_row.indices
-                s_num = min(len(indices), samp_num_list[d])
                 sampled_indices = np.random.choice(
-                    indices, s_num, replace=False)
+                    indices, samp_num_list[d], replace=True)
                 after_nodes.append(sampled_indices)
             after_nodes = np.unique(np.concatenate(after_nodes))
             after_nodes = np.concatenate(
@@ -191,7 +198,9 @@ class vrgcn_sampler:
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
-        self.lap_matrix = row_normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
+        self.adj_matrix_sc = adj_matrix + sp.eye(adj_matrix.shape[0])
+        self.lap_matrix = normalize(
+            adj_matrix + sp.eye(adj_matrix.shape[0]))
         self.train_nodes = train_nodes
 
     def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
@@ -203,7 +212,7 @@ class vrgcn_sampler:
         adjs_exact = []
 
         for d in range(depth):
-            U = self.adj_matrix[previous_nodes, :]
+            U = self.adj_matrix_sc[previous_nodes, :]
             after_nodes = []
             after_nodes_exact = []
             for U_row in U:
@@ -241,34 +250,96 @@ class vrgcn_sampler:
         sampled_nodes = [np.arange(num_nodes) for _ in range(depth)]
         return adjs, input_nodes, sampled_nodes
 
-# deprecated
-def graphsaint_sampler(seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, lap_matrix, lap_matrix_sq, depth):
-    lap_matrix_coo = lap_matrix.tocoo()
-    row, col = lap_matrix_coo.row, lap_matrix_coo.col
+class graphsaint_sampler:
+    def __init__(self, adj_matrix, train_nodes, node_budget):
+        assert(adj_matrix.diagonal().sum() == 0)  # make sure diagnal is zero
+        # make sure is symmetric
+        assert((adj_matrix != adj_matrix.T).nnz == 0)
+        self.adj_matrix = adj_matrix
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
+        lap_matrix = row_normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
+        self.lap_matrix = lap_matrix
+        lap_matrix_sq = lap_matrix.multiply(lap_matrix)[train_nodes,:][:, train_nodes]
+        p = np.array(np.sum(lap_matrix_sq, axis=0))[0]
+        self.sample_prob = node_budget*p/p.sum()
+        self.train_nodes = train_nodes
+        self.node_budget = node_budget
 
-    A = sp.csr_matrix((np.ones_like(lap_matrix.data),
-                       lap_matrix.indices, lap_matrix.indptr), shape=lap_matrix.shape)
-    D_inv = 1.0/A.sum(axis=1)
-    sample_prob = D_inv[row] + D_inv[col]
-    sample_prob = len(batch_nodes) * sample_prob / sample_prob.sum()
+    def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
+        np.random.seed(seed)
+        sample_mask = np.random.uniform(0,1,len(self.train_nodes)) <= self.sample_prob
+        sample_prob = self.sample_prob[sample_mask]
+        batch_nodes = self.train_nodes[sample_mask]
 
-    sampled, cnt = [], 0
+        adj = self.lap_matrix[batch_nodes, :][:, batch_nodes].multiply(1/sample_prob)
+        adj = row_normalize(adj)
 
-    while cnt < len(batch_nodes):
-        for e in range(len(sample_prob)):
-            if np.random.rand() < sample_prob[e]:
-                sampled.append(row[e])
-                sampled.append(col[e])
-                cnt += 1
+        adjs = []
+        sampled_nodes = []
+        for d in range(depth):
+            adjs += [sparse_mx_to_torch_sparse_tensor(adj)]
+            sampled_nodes.append(batch_nodes)
+        adjs.reverse()
+        sampled_nodes.reverse()
 
-    sampled = np.unique(np.array(sampled))
+        return adjs, batch_nodes, batch_nodes, sample_prob*len(self.train_nodes), sampled_nodes
 
-    adj = lap_matrix[sampled, :][:, sampled]
+    def full_batch(self, batch_nodes, num_nodes, depth):
+        adjs = [sparse_mx_to_torch_sparse_tensor(
+            self.lap_matrix) for _ in range(depth)]
+        input_nodes = np.arange(num_nodes)
+        sampled_nodes = [np.arange(num_nodes) for _ in range(depth)]
+        return adjs, input_nodes, sampled_nodes
 
-    adjs = [sparse_mx_to_torch_sparse_tensor(
-        row_normalize(adj)) for d in range(depth)]
-    sampled_nodes = [sampled for d in range(depth)]
-    return adjs, sampled, sampled, probs_nodes, sampled_nodes
+    def large_batch(self, batch_nodes, num_nodes, depth):
+        previous_nodes = batch_nodes
+        sampled_nodes = []
+        adjs = []
+        for d in range(depth):
+            U = self.lap_matrix[previous_nodes, :]
+            after_nodes = []
+            for U_row in U:
+                indices = U_row.indices
+                after_nodes.append(indices)
+            after_nodes = np.unique(np.concatenate(after_nodes))
+            after_nodes = np.concatenate(
+                [previous_nodes, np.setdiff1d(after_nodes, previous_nodes)])
+            adj = U[:, after_nodes]
+            adjs += [sparse_mx_to_torch_sparse_tensor(adj)]
+            sampled_nodes.append(previous_nodes)
+            previous_nodes = after_nodes
+        adjs.reverse()
+        sampled_nodes.reverse()
+        return adjs, previous_nodes, sampled_nodes
+
+# def graphsaint_sampler(seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, lap_matrix, lap_matrix_sq, depth):
+#     lap_matrix_coo = lap_matrix.tocoo()
+#     row, col = lap_matrix_coo.row, lap_matrix_coo.col
+
+#     A = sp.csr_matrix((np.ones_like(lap_matrix.data),
+#                        lap_matrix.indices, lap_matrix.indptr), shape=lap_matrix.shape)
+#     D_inv = 1.0/A.sum(axis=1)
+#     sample_prob = D_inv[row] + D_inv[col]
+#     sample_prob = len(batch_nodes) * sample_prob / sample_prob.sum()
+
+#     sampled, cnt = [], 0
+
+#     while cnt < len(batch_nodes):
+#         for e in range(len(sample_prob)):
+#             if np.random.rand() < sample_prob[e]:
+#                 sampled.append(row[e])
+#                 sampled.append(col[e])
+#                 cnt += 1
+
+#     sampled = np.unique(np.array(sampled))
+
+#     adj = lap_matrix[sampled, :][:, sampled]
+
+#     adjs = [sparse_mx_to_torch_sparse_tensor(
+#         row_normalize(adj)) for d in range(depth)]
+#     sampled_nodes = [sampled for d in range(depth)]
+#     return adjs, sampled, sampled, probs_nodes, sampled_nodes
+
 
 class subgraph_sampler:
     def __init__(self, adj_matrix, train_nodes):
@@ -276,21 +347,22 @@ class subgraph_sampler:
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
         self.lap_matrix = normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
         self.train_nodes = train_nodes
 
     def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
         adj = self.lap_matrix[batch_nodes, :][:, batch_nodes]
         adj = row_normalize(adj)
-        
+
         U = self.lap_matrix[batch_nodes, :]
         after_nodes_exact = []
-        for U_row in U: 
+        for U_row in U:
             indices = U_row.indices
             after_nodes_exact.append(indices)
         after_nodes_exact = np.unique(np.concatenate(after_nodes_exact))
         after_nodes_exact = np.concatenate(
-                [batch_nodes, np.setdiff1d(after_nodes_exact, batch_nodes)])
+            [batch_nodes, np.setdiff1d(after_nodes_exact, batch_nodes)])
         adj_exact = U[:, after_nodes_exact]
 
         adjs = []
@@ -315,7 +387,7 @@ class subgraph_sampler:
         input_nodes = np.arange(num_nodes)
         sampled_nodes = [np.arange(num_nodes) for _ in range(depth)]
         return adjs, input_nodes, sampled_nodes
-    
+
     def large_batch(self, batch_nodes, num_nodes, depth):
         previous_nodes = batch_nodes
         sampled_nodes = []
@@ -337,12 +409,14 @@ class subgraph_sampler:
         sampled_nodes.reverse()
         return adjs, previous_nodes, sampled_nodes
 
+
 class exact_sampler:
     def __init__(self, adj_matrix, train_nodes):
         assert(adj_matrix.diagonal().sum() == 0)  # make sure diagnal is zero
         # make sure is symmetric
         assert((adj_matrix != adj_matrix.T).nnz == 0)
         self.adj_matrix = adj_matrix
+        self.adj_matrix_sc = adj_matrix+sp.eye(adj_matrix.shape[0])
         self.train_nodes = train_nodes
         self.lap_matrix = normalize(adj_matrix + sp.eye(adj_matrix.shape[0]))
 

@@ -139,6 +139,7 @@ def sgd_step(net, optimizer, feat_data, labels,
     while iter_num < inner_loop_num:
         for adjs, input_nodes, output_nodes, probs_nodes, sampled_nodes in train_data:
             adjs = package_mxl(adjs, device)
+
             # compute current stochastic gradient
             optimizer.zero_grad()
             current_loss = net.partial_grad(

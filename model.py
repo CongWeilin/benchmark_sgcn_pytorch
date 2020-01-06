@@ -15,11 +15,11 @@ class GCN(nn.Module):
 
         self.gcs = nn.ModuleList()
         self.gcs.append(GraphConvolution(nfeat,  nhid))
-        for _ in range(layers-2):
+        for _ in range(layers-1):
             self.gcs.append(GraphConvolution(nhid,  nhid))
-        self.gc_out = GraphConvolution(nhid, num_classes)
-        self.gc_out.linear.register_forward_hook(autograd_wl.capture_activations)
-        self.gc_out.linear.register_backward_hook(autograd_wl.capture_backprops)
+        self.gc_out = nn.Linear(nhid, num_classes)
+        self.gc_out.register_forward_hook(autograd_wl.capture_activations)
+        self.gc_out.register_backward_hook(autograd_wl.capture_backprops)
         
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
@@ -37,7 +37,7 @@ class GCN(nn.Module):
             x = self.gcs[ell](x, adjs[ell])
             x = self.relu(x)
             x = self.dropout(x)
-        x = self.gc_out(x, adjs[self.layers-1])
+        x = self.gc_out(x)
         return x
 
     def partial_grad(self, x, adjs, targets, weight=None):
@@ -45,7 +45,11 @@ class GCN(nn.Module):
         if weight is None:
             loss = self.loss_f(outputs, targets)
         else:
-            loss = self.loss_f_vec(outputs, targets) * weight
+            if self.multi_class:
+                loss = self.loss_f_vec(outputs, targets)
+                loss = loss.mean(1) * weight
+            else:
+                loss = self.loss_f_vec(outputs, targets) * weight
             loss = loss.sum()
         loss.backward()
         return loss.detach()
@@ -88,14 +92,14 @@ class GraphSageGCN(nn.Module):
 
         self.gcs = nn.ModuleList()
         self.gcs.append(GraphSageConvolution(nfeat, nhid, use_lynorm=True))
-        for _ in range(layers-2):
-            self.gcs.append(GraphSageConvolution(nhid,  nhid, use_lynorm=True))
-        self.gc_out = GraphSageConvolution(nhid,  num_classes, use_lynorm=False) 
+        for _ in range(layers-1):
+            self.gcs.append(GraphSageConvolution(2*nhid,  nhid, use_lynorm=True))
+        self.gc_out = nn.Linear(2*nhid,  num_classes) 
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(dropout)
 
-        self.gc_out.linear.register_forward_hook(autograd_wl.capture_activations)
-        self.gc_out.linear.register_backward_hook(autograd_wl.capture_backprops)
+        self.gc_out.register_forward_hook(autograd_wl.capture_activations)
+        self.gc_out.register_backward_hook(autograd_wl.capture_backprops)
         
         if multi_class:
             self.loss_f = nn.BCEWithLogitsLoss()
@@ -109,7 +113,7 @@ class GraphSageGCN(nn.Module):
             x = self.gcs[ell](x, adjs[ell])
             x = self.relu(x)
             x = self.dropout(x)
-        x = self.gc_out(x, adjs[self.layers-1])
+        x = self.gc_out(x)
         return x
 
     def partial_grad(self, x, adjs, targets, weight=None):
@@ -117,8 +121,11 @@ class GraphSageGCN(nn.Module):
         if weight is None:
             loss = self.loss_f(outputs, targets)
         else:
-            loss = self.loss_f_vec(outputs, targets) * weight
-#             print('>>>', loss.max(), loss.min(), loss.shape, weight.max(), weight.min(), weight.shape)
+            if self.multi_class:
+                loss = self.loss_f_vec(outputs, targets)
+                loss = loss.mean(1) * weight
+            else:
+                loss = self.loss_f_vec(outputs, targets) * weight
             loss = loss.sum()
         loss.backward()
         return loss.detach()
