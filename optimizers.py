@@ -72,6 +72,49 @@ def boost_step(net, optimizer, feat_data, labels,
 
     return train_loss, running_loss, grad_variance
 
+"""
+Minimal Sampling GCN on the fly
+"""
+def boost_otf_step(net, optimizer, feat_data, labels,
+             train_nodes, valid_nodes,
+             adjs_full, train_data, inner_loop_num, device, calculate_grad_vars=False):
+    """
+    Function to updated weights with a SGD backpropagation
+    args : net, optimizer, train_loader, test_loader, loss function, number of inner epochs, args
+    return : train_loss, test_loss, grad_norm_lb
+    """
+    net.train()
+
+    running_loss = []
+    iter_num = 0.0
+
+    grad_variance = []
+    # Run over the train_loader
+    while iter_num < inner_loop_num:
+        for adjs, input_nodes, output_nodes, probs_nodes, sampled_nodes in train_data:
+            adjs = package_mxl(adjs, device)
+            weight = 1.0/torch.FloatTensor(probs_nodes).to(device)
+            # compute current stochastic gradient
+            optimizer.zero_grad()
+            current_loss, current_grad_norm = net.partial_grad_with_norm(
+                feat_data[input_nodes], adjs, labels[output_nodes], weight)
+
+            # only for experiment purpose to demonstrate ...
+            if calculate_grad_vars:
+                grad_variance.append(calculate_grad_variance(
+                    net, feat_data, labels, train_nodes, adjs_full))
+
+            optimizer.step()
+
+            # print statistics
+            running_loss += [current_loss.cpu().detach()]
+            iter_num += 1.0
+
+    # calculate training loss
+    train_loss = np.mean(running_loss)
+
+    return train_loss, running_loss, grad_variance
+
 def variance_reduced_boost_step(net, optimizer, feat_data, labels,
              train_nodes, valid_nodes,
              adjs_full, train_data, inner_loop_num, device, wrapper, calculate_grad_vars=False):

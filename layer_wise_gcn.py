@@ -37,13 +37,15 @@ def fastgcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,
     grad_variance_all = []
     loss_train_all = [cur_test_loss]
     times = []
-
+    data_prepare_times = []
+    
     for epoch in np.arange(args.epoch_num):
 
         train_nodes_p = args.batch_size * \
             np.ones_like(train_nodes)/len(train_nodes)
 
         # prepare train data
+        tp0 = time.time()
         pool = mp.Pool(args.pool_num)
         jobs = prepare_data(pool, fastgcn_sampler_.mini_batch, process_ids, train_nodes, train_nodes_p, samp_num_list, len(feat_data),
                             adj_matrix, args.n_layers)
@@ -51,6 +53,8 @@ def fastgcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,
         train_data = [job.get() for job in jobs]
         pool.close()
         pool.join()
+        tp1 = time.time()
+        data_prepare_times += [tp1-tp0]
 
         inner_loop_num = args.batch_num
 
@@ -94,18 +98,25 @@ def fastgcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,
 
     f1_score_test = best_model.calculate_f1(
         feat_data, adjs_full, labels, test_nodes)
-    print('Average time is %0.3f' % np.mean(times))
+    print('Average training time is %0.3f' % np.mean(times))
+    print('Average data prepare time is %0.3f'%np.mean(data_prepare_times))
     return best_model, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all
 
 
-def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,  args, device):
+def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,  args, device, concat=True):
     samp_num_list = np.array([args.samp_num for _ in range(args.n_layers)])
     # use multiprocess sample data
     process_ids = np.arange(args.batch_num)
 
     ladies_sampler_ = ladies_sampler(adj_matrix, train_nodes)
-    susage = GCN(nfeat=feat_data.shape[1], nhid=args.nhid, num_classes=args.num_classes,
-                 layers=args.n_layers, dropout=args.dropout, multi_class=args.multi_class).to(device)
+    
+    if concat:        
+        susage = GraphSageGCN(nfeat=feat_data.shape[1], nhid=args.nhid, num_classes=args.num_classes,
+                     layers=args.n_layers, dropout=args.dropout, multi_class=args.multi_class).to(device)
+    else:
+        susage = GCN(nfeat=feat_data.shape[1], nhid=args.nhid, num_classes=args.num_classes,
+                     layers=args.n_layers, dropout=args.dropout, multi_class=args.multi_class).to(device)
+    
     susage.to(device)
     print(susage)
 
@@ -128,6 +139,7 @@ def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, 
     grad_variance_all = []
     loss_train_all = [cur_test_loss]
     times = []
+    data_prepare_times = []
 
     for epoch in np.arange(args.epoch_num):
 
@@ -135,13 +147,21 @@ def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, 
             np.ones_like(train_nodes)/len(train_nodes)
 
         # prepare train data
+        tp0 = time.time()
         pool = mp.Pool(args.pool_num)
-        jobs = prepare_data(pool, ladies_sampler_.mini_batch, process_ids, train_nodes, train_nodes_p, samp_num_list, len(feat_data),
+        if concat:
+            jobs = prepare_data(pool, ladies_sampler_.mini_batch_ld, process_ids, train_nodes, train_nodes_p, samp_num_list, len(feat_data),
+                            adj_matrix, args.n_layers) 
+        else:
+            jobs = prepare_data(pool, ladies_sampler_.mini_batch, process_ids, train_nodes, train_nodes_p, samp_num_list, len(feat_data),
                             adj_matrix, args.n_layers)
         # fetch train data
+        
         train_data = [job.get() for job in jobs]
         pool.close()
         pool.join()
+        tp1 = time.time()
+        data_prepare_times += [tp1-tp0]
 
         inner_loop_num = args.batch_num
 
@@ -185,5 +205,6 @@ def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, 
 
     f1_score_test = best_model.calculate_f1(
         feat_data, adjs_full, labels, test_nodes)
-    print('Average time is %0.3f' % np.mean(times))
+    print('Average training time is %0.3f' % np.mean(times))
+    print('Average data prepare time is %0.3f'%np.mean(data_prepare_times))
     return best_model, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all

@@ -44,6 +44,7 @@ def graphsage(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_node
     grad_variance_all = []
     loss_train_all = [cur_test_loss]
     times = []
+    data_prepare_times = []
 
     for epoch in np.arange(args.epoch_num):
 
@@ -51,6 +52,7 @@ def graphsage(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_node
             np.ones_like(train_nodes)/len(train_nodes)
 
         # prepare train data
+        tp0 = time.time()
         pool = mp.Pool(args.pool_num)
         jobs = prepare_data(pool, graphsage_sampler_.mini_batch, process_ids, train_nodes, train_nodes_p, samp_num_list, len(feat_data),
                             adj_matrix, args.n_layers)
@@ -58,6 +60,8 @@ def graphsage(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_node
         train_data = [job.get() for job in jobs]
         pool.close()
         pool.join()
+        tp1 = time.time()
+        data_prepare_times += [tp1-tp0]
 
         inner_loop_num = args.batch_num
 
@@ -102,6 +106,7 @@ def graphsage(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_node
     f1_score_test = best_model.calculate_f1(
         feat_data, adjs_full, labels, test_nodes)
     print('Average time is %0.3f' % np.mean(times))
+    print('Average data prepare time is %0.3f'%np.mean(data_prepare_times))
     return best_model, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all
 
 
@@ -174,7 +179,7 @@ def exact_gcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_node
                                                                      calculate_grad_vars=bool(args.show_grad_norm))
         t3 = time.time()
         times += [t3-t2]
-        print('mvs_gcn run time per epoch is %0.3f' % (t1-t0+t3-t2))
+        print('mvs_gcn run time per epoch is %0.3f' % (t3-t2))
 
         loss_train_all.extend(cur_train_loss_all)
         grad_variance_all.extend(grad_variance)
@@ -220,7 +225,7 @@ Variance Reduced GCN
 def vrgcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, args, device, concat=False):
     samp_num_list = np.array([2 for _ in range(args.n_layers)])
     wrapper = ForwardWrapper(n_nodes=len(
-        feat_data), n_hid=args.nhid, n_layers=args.n_layers, n_classes=args.num_classes)
+        feat_data), n_hid=args.nhid, n_layers=args.n_layers, n_classes=args.num_classes, concat=concat)
 
     vrgcn_sampler_ = vrgcn_sampler(adj_matrix, train_nodes)
 

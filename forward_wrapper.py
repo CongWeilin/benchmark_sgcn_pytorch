@@ -5,10 +5,13 @@ Wrapper for variance reduction opts
 """
 
 class ForwardWrapper(nn.Module):
-    def __init__(self, n_nodes, n_hid, n_layers, n_classes):
+    def __init__(self, n_nodes, n_hid, n_layers, n_classes, concat=False):
         super(ForwardWrapper, self).__init__()
         self.n_layers = n_layers
-        self.hiddens = torch.zeros(n_layers, n_nodes, 2*n_hid)
+        if concat:
+            self.hiddens = torch.zeros(n_layers, n_nodes, 2*n_hid)
+        else:
+            self.hiddens = torch.zeros(n_layers, n_nodes, n_hid)
 
     def forward_full(self, net, x, adjs, sampled_nodes):
         for ell in range(len(net.gcs)):
@@ -40,7 +43,7 @@ class ForwardWrapper(nn.Module):
         outputs = self.forward_full(net, x, adjs, sampled_nodes)
         loss = net.loss_f(outputs, targets[batch_nodes])
         loss.backward()
-        grad_per_sample = autograd_wl.calculate_sample_grad()
+        grad_per_sample = autograd_wl.calculate_sample_grad(net.gc_out)
         return grad_per_sample.cpu().numpy()
         
     def partial_grad(self, net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes, targets, weight=None):
@@ -56,3 +59,19 @@ class ForwardWrapper(nn.Module):
             loss = loss.sum()
         loss.backward()
         return loss.detach()
+    
+    def partial_grad_with_norm(self, net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes, targets, weight):
+        num_samples = targets.size(0)
+        outputs = self.forward_mini(net, x, adjs, sampled_nodes, x_exact, adjs_exact, input_exact_nodes)
+        
+        if net.multi_class:
+            loss = net.loss_f_vec(outputs, targets)
+            loss = loss.mean(1) * weight
+        else:
+            loss = net.loss_f_vec(outputs, targets) * weight
+        loss = loss.sum()
+        loss.backward()
+        grad_per_sample = autograd_wl.calculate_sample_grad(net.gc_out)
+        
+        grad_per_sample = grad_per_sample*(1/weight/num_samples)
+        return loss.detach(), grad_per_sample.cpu().numpy()

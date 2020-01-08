@@ -1,6 +1,6 @@
 from utils import *
 from packages import *
-from optimizers import sgd_step, variance_reduced_step
+from optimizers import sgd_step, variance_reduced_step, boost_step
 from forward_wrapper import ForwardWrapper
 """
 ClusterGCN
@@ -104,7 +104,7 @@ def clustergcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nod
 
     f1_score_test = best_model.calculate_f1(
         feat_data, adjs_full, labels, test_nodes)
-    print('Average time is %0.3f' % np.mean(times))
+    print('Average training time is %0.3f' % np.mean(times))
     print('Average data prepare time is %0.3f'%np.mean(data_prepare_times))
     return best_model, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all
 
@@ -131,8 +131,7 @@ def graphsaint(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nod
     susage.to(device)
     print(susage)
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, susage.parameters()))
+    optimizer = optim.Adam(susage.parameters())
 
     adjs_full, input_nodes_full, sampled_nodes_full = graphsaint_sampler_.full_batch(
         train_nodes, len(feat_data), args.n_layers)
@@ -157,8 +156,6 @@ def graphsaint(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nod
         train_nodes_p = args.batch_size * \
             np.ones_like(train_nodes)/len(train_nodes)
 
-        susage.zero_grad()
-
         # prepare train data
         tp0 = time.time()
         pool = mp.Pool(args.pool_num)
@@ -174,7 +171,8 @@ def graphsaint(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nod
         inner_loop_num = args.batch_num
 
         t2 = time.time()
-        cur_train_loss, cur_train_loss_all, grad_variance = sgd_step(susage, optimizer, feat_data, labels,
+        
+        cur_train_loss, cur_train_loss_all, grad_variance = boost_step(susage, optimizer, feat_data, labels,
                                                                      train_nodes, valid_nodes,
                                                                      adjs_full, train_data, inner_loop_num, device,
                                                                      calculate_grad_vars=bool(args.show_grad_norm))
@@ -211,7 +209,7 @@ def graphsaint(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nod
               '| train loss: %.8f' % cur_train_loss,
               '| val loss: %.8f' % cur_test_loss,
               '| val f1: %.8f' % val_f1)
-    print('Average time is %0.3f' % np.mean(times))
+    print('Average training time is %0.3f' % np.mean(times))
     print('Average data prepare time is %0.3f'%np.mean(data_prepare_times))
     f1_score_test = best_model.calculate_f1(
         feat_data, adjs_full, labels, test_nodes)
@@ -242,8 +240,7 @@ def subgraph_gcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_n
     susage.to(device)
     print(susage)
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, susage.parameters()))
+    optimizer = optim.Adam(susage.parameters())
 
     adjs_full, input_nodes_full, sampled_nodes_full = subgraph_sampler_.full_batch(
         train_nodes, len(feat_data), args.n_layers)
