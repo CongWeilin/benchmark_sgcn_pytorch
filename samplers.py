@@ -193,7 +193,7 @@ class graphsage_sampler:
         previous_nodes = batch_nodes
         adjs = []
         for d in range(depth):
-            U = self.adj_matrix_sc[previous_nodes, :]
+            U = self.lap_matrix[previous_nodes, :]
             after_nodes = []
             for U_row in U:
                 indices = U_row.indices
@@ -239,7 +239,7 @@ class vrgcn_sampler:
         adjs_exact = []
 
         for d in range(depth):
-            U = self.adj_matrix_sc[previous_nodes, :]
+            U = self.lap_matrix[previous_nodes, :]
             after_nodes = []
             after_nodes_exact = []
             for U_row in U:

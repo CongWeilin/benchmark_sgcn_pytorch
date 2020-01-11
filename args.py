@@ -6,7 +6,7 @@ Dataset arguments
 parser = argparse.ArgumentParser(
     description='Training GCN on Large-scale Graph Datasets')
 
-parser.add_argument('--dataset', type=str, default='ppi',
+parser.add_argument('--dataset', type=str, default='yelp',
                     help='Dataset name: cora/citeseer/pubmed/flickr/reddit/ppi/ppi-large')
 parser.add_argument('--nhid', type=int, default=256,
                     help='Hidden state dimension')
@@ -26,7 +26,7 @@ parser.add_argument('--samp_num', type=int, default=512,
                     help='Number of sampled nodes per layer (only for ladies & factgcn)')
 parser.add_argument('--dropout', type=float, default=0.1,
                     help='Dropout rate')
-parser.add_argument('--cuda', type=int, default=1,
+parser.add_argument('--cuda', type=int, default=-1,
                     help='Avaiable GPU ID')
 parser.add_argument('--is_ratio', type=float, default=1.0,
                     help='Importance sampling rate')

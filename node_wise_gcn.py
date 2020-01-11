@@ -9,8 +9,8 @@ GraphSage
 
 
 def graphsage(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,  args, device, concat=False):
-    # samp_num_list = np.array([5 for _ in range(args.n_layers)])
-    samp_num_list = np.array([25, 10])
+    samp_num_list = np.array([5 for _ in range(args.n_layers)])
+    # samp_num_list = np.array([25, 10])
     # use multiprocess sample data
     process_ids = np.arange(args.batch_num)
 
@@ -261,6 +261,9 @@ def vrgcn(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, a
     loss_train_all = [cur_test_loss]
     times = []
     data_prepare_times = []
+    
+    # warm start
+    wrapper.forward_full(susage, feat_data, adjs_full, sampled_nodes_full)
     
     for epoch in np.arange(args.epoch_num):
 

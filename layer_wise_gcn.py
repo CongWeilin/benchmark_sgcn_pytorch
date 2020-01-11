@@ -120,8 +120,7 @@ def ladies(feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes, 
     susage.to(device)
     print(susage)
 
-    optimizer = optim.Adam(
-        filter(lambda p: p.requires_grad, susage.parameters()))
+    optimizer = optim.Adam(susage.parameters())
 
     adjs_full, input_nodes_full, sampled_nodes_full = ladies_sampler_.full_batch(
         train_nodes, len(feat_data), args.n_layers)
