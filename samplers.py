@@ -355,7 +355,7 @@ class subgraph_sampler:
         self.train_nodes = train_nodes
 
     def mini_batch(self, seed, batch_nodes, probs_nodes, samp_num_list, num_nodes, adj_matrix, depth):
-        adj = self.lap_matrix[batch_nodes, :][:, batch_nodes]
+        adj = self.lap_matrix[batch_nodes, :][:, batch_nodes].multiply(1/probs_nodes)
         adj = row_normalize(adj)
 
         U = self.lap_matrix[batch_nodes, :]

@@ -1,7 +1,7 @@
 from utils import *
-from mvs_gcn import mvs_gcn, mvs_gcn_plus
-from layer_wise_gcn import ladies, fastgcn
-from node_wise_gcn import graphsage, vrgcn, exact_gcn
+from mvs_gcn import mvs_gcn_plus, mvs_gcn_plus_otf
+from layer_wise_gcn import ladies
+from node_wise_gcn import graphsage, vrgcn
 from subgraph_gcn import clustergcn, graphsaint
 import argparse
 
@@ -39,7 +39,7 @@ parser.add_argument('--cuda', type=int, default=0,
                     help='Avaiable GPU ID')
 parser.add_argument('--is_ratio', type=float, default=0.15,
                     help='Importance sampling rate')
-parser.add_argument('--show_grad_norm', type=int, default=0,
+parser.add_argument('--show_grad_norm', type=int, default=1,
                     help='Whether show gradient norm 0-False, 1-True')
 parser.add_argument('--cluster_bsize', type=int, default=5,
                     help='how many cluster selected each mini-batch')
@@ -86,7 +86,7 @@ else:
 """
 Main
 """
-use_concat = True if args.dataset in ['ppi', 'ppi-large', 'yelp', 'amazon'] else False
+use_concat = True if args.dataset in ['ppi', 'ppi-large'] else False
 
 print('mvs_gcn_plus')
 susage, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all  = mvs_gcn_plus(
@@ -94,7 +94,7 @@ susage, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all 
 results['mvs_gcn_plus'] = [loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all]
 
 print('mvs_gcn_plus_otf')
-susage, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all  = mvs_gcn_plus(
+susage, loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all  = mvs_gcn_plus_otf(
     feat_data, labels, adj_matrix, train_nodes, valid_nodes, test_nodes,  args, device, concat=use_concat)
 results['mvs_gcn_plus_otf'] = [loss_train, loss_test, loss_train_all, f1_score_test, grad_variance_all]
 

@@ -8,7 +8,7 @@ import numpy as np
 def prepare_data(pool, sampler, process_ids, train_nodes, train_nodes_p, samp_num_list, num_nodes, adj_matrix, depth, is_ratio=1.0):
     num_train_nodes = len(train_nodes)
     jobs = []
-    for _ in process_ids:
+    for p_id in process_ids:
         sample_mask = np.random.uniform(0, 1, num_train_nodes)<= train_nodes_p
         probs_nodes = train_nodes_p[sample_mask] * len(train_nodes) * is_ratio
         batch_nodes = train_nodes[sample_mask]
